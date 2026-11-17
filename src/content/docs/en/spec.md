@@ -443,10 +443,29 @@ Errors use `application/problem+json` (RFC 9457).
 
 ---
 
-## 11. Limits and security
+## 11. Authentication, limits and security
 
+### 11.1 What needs an identity and what does not
+
+| Kind | Examples | Identity (token) | How it is limited |
+|---|---|---|---|
+| Public reads | `meta`, the spectate list, public records, `GET /players/{id}`, `GET /ratings` | **Not required** | CDN caching (e.g. Cloudflare) and **per-IP rate limits** |
+| Writes and play | creating games, moves, seeks, accepts, personal events | **Required** (Bearer token) | **Per-token** limits |
+| Heavy operations such as solution trees | reading/writing a solution tree (servers that implement it) | **Required** | **Per-token** limits (may be stricter than reads) |
+
+- **Public reads work without an identity** (MUST). Servers SHOULD make responses cache-friendly (`Cache-Control`, `ETag`).
+- **No app registration is required** (§4.2). Instead, **a self-identifying `User-Agent` is mandatory** (§4.6) and **limits are per token**. An abusive token can be **revoked individually** (MUST).
+- Servers provide a way to revoke a token (e.g. an operator screen) and reject a revoked token with `401` (`invalid_token`). A single bad token can be stopped before any whole app or user is blocked.
+- The table above is the minimum. **A server MAY require a token for public reads too** (MAY); if it does, it says so in `meta`.
+
+### 11.2 Limits
 
 - **Limits are at the server's discretion.** Exceeding them gives `429` + `Retry-After` (MUST); `RateLimit-*` headers are SHOULD. Limits are published in `meta.limits`.
+- **On `429`, an app MUST wait for `Retry-After` (about 1 minute if absent) before resuming.** Apps SHOULD keep to **one request in flight at a time** by default — the same etiquette as Lichess.
+- Limits are counted per IP for public reads and per token for authenticated operations.
+
+### 11.3 Other security
+
 - **CORS:** return `Access-Control-Allow-Origin` appropriately so browser apps can use the API (allow `Authorization`). Tokens are sent as Bearer rather than cookies, so servers are not exposed to CSRF.
 - **Prevent token confusion:** a token is accepted only by the server that issued it (`aud` is the server's `api_base`).
 - **Server authority:** colors, move numbers and times claimed by the app are ignored.
