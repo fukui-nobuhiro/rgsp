@@ -12,6 +12,8 @@ npm run build    # Redoc の単体版を public/reference/ に置き、dist/ に
 npm run deploy   # Cloudflare Workers（静的アセット）へ公開（Worker 名 rgsp-site、ドメイン rgsp.renjuportal.com）。wrangler のログインが要る
 ```
 
+`main` への push で、Cloudflare Workers Builds が自動でビルドして公開する（`npm run build` → `npx wrangler deploy`）。手元から出すときだけ `npm run deploy` を使う。
+
 ## 構成
 | 場所 | 内容 |
 |---|---|
