@@ -1,0 +1,8 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "rgsp-site",
+  "compatibility_date": "2026-11-01",
+  "assets": { "directory": "./dist", "not_found_handling": "404-page" },
+  // renjuportal.com のゾーンが、deploy するアカウントにあれば、deploy でカスタムドメインも付く
+  "routes": [{ "pattern": "rgsp.renjuportal.com", "custom_domain": true }]
+}

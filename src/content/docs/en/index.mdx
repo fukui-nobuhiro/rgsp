@@ -1,0 +1,33 @@
+---
+title: RGSP — Renju Game Server Protocol
+description: A common specification for Renju and Gomoku game servers that anyone can run and any app can use.
+template: splash
+hero:
+  tagline: Anyone can run a server, and any app can play on it. A common specification for Renju and Gomoku game servers.
+  actions:
+    - text: Read the overview
+      link: /en/overview/
+      icon: right-arrow
+    - text: API reference
+      link: /reference/
+      variant: secondary
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+> **This is a draft (v0.1).** No implementation, conformance suite or server directory has been published yet. See [Status and open items](/en/status/).
+
+<CardGrid>
+  <Card title="Choose a server, then play" icon="random">
+    Users choose a game server inside the app. Matchmaking and ratings happen inside the chosen server.
+  </Card>
+  <Card title="Anyone can run, anyone can build" icon="rocket">
+    Servers and apps need no prior registration. On the same server, users of different apps can play each other.
+  </Card>
+  <Card title="REST + SSE" icon="seti:json">
+    Commands are HTTP POSTs; changes arrive over SSE. A dropped connection resumes from a sequence number.
+  </Card>
+  <Card title="Renju rules in the spec" icon="pencil">
+    Forbidden moves, free opening, Taraguchi-10 and Swap2 — the rules and openings of Renju and Gomoku are part of the spec.
+  </Card>
+</CardGrid>

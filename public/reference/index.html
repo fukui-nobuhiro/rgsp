@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RGSP API リファレンス</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body { margin: 0; padding: 0; background: #ffffff; }
+      /* サイトに戻る */
+      .back { position: fixed; right: 16px; bottom: 16px; z-index: 10; padding: 8px 14px;
+        font: 400 14px 'Noto Sans JP', system-ui, sans-serif; color: #1f1f1f; background: #ffffff;
+        border: 1px solid #d0d0d0; border-radius: 999px; text-decoration: none; }
+      .back:hover, .back:focus-visible { background: #ececec; }
+    </style>
+  </head>
+  <body>
+    <div id="redoc"></div>
+    <a class="back" href="/">← 仕様書サイト</a>
+    <script src="./redoc.standalone.js"></script>
+    <script>
+      /* 色はつけない（グレースケール）。フォントは Noto Sans JP */
+      Redoc.init(
+        '/openapi.yaml',
+        {
+          hideDownloadButton: false,
+          expandResponses: '200,201',
+          pathInMiddlePanel: true,
+          theme: {
+            colors: {
+              primary: { main: '#333333' },
+              text: { primary: '#1f1f1f', secondary: '#5c5c5c' },
+              border: { dark: '#d0d0d0', light: '#ececec' },
+              http: {
+                get: '#5c5c5c', post: '#333333', put: '#5c5c5c', options: '#8a8a8a',
+                patch: '#5c5c5c', delete: '#111111', basic: '#5c5c5c', link: '#5c5c5c', head: '#8a8a8a',
+              },
+              responses: {
+                success: { color: '#333333', backgroundColor: '#f6f6f6' },
+                error: { color: '#111111', backgroundColor: '#ececec' },
+                redirect: { color: '#5c5c5c', backgroundColor: '#f6f6f6' },
+                info: { color: '#5c5c5c', backgroundColor: '#f6f6f6' },
+              },
+            },
+            sidebar: { backgroundColor: '#f6f6f6', textColor: '#1f1f1f', activeTextColor: '#111111' },
+            rightPanel: { backgroundColor: '#262626' },
+            typography: {
+              fontSize: '13px',
+              lineHeight: '1.7',
+              fontFamily: "'Noto Sans JP', system-ui, sans-serif",
+              headings: { fontFamily: "'Noto Sans JP', system-ui, sans-serif", fontWeight: '500' },
+              code: { fontSize: '12px', color: '#1f1f1f', backgroundColor: '#ececec' },
+              links: { color: '#333333', visited: '#5c5c5c', hover: '#111111' },
+            },
+            logo: { gutter: '16px' },
+          },
+        },
+        document.getElementById('redoc')
+      );
+    </script>
+  </body>
+</html>

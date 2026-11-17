@@ -1,0 +1,33 @@
+---
+title: RGSP — 連珠対局サーバープロトコル
+description: 誰でも運営できる連珠・五目並べの対局サーバーと、どのアプリからでも使える共通 API の仕様。
+template: splash
+hero:
+  tagline: 誰でもサーバーを運営でき、どのアプリからでも対局できる。連珠・五目並べの対局サーバーの共通仕様です。
+  actions:
+    - text: 概要を読む
+      link: /overview/
+      icon: right-arrow
+    - text: API リファレンス
+      link: /reference/
+      variant: secondary
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+> **ドラフト（v0.1）です。** 実装・適合性テスト・サーバー一覧は、まだ公開されていません。[決まっていること・未定のこと](/status/)を見てください。
+
+<CardGrid>
+  <Card title="サーバーを選んで対局" icon="random">
+    ユーザーはアプリの中で対局するサーバーを選びます。マッチングとレーティングは、選んだサーバーの中で行います。
+  </Card>
+  <Card title="誰でも運営・誰でも開発" icon="rocket">
+    サーバーもアプリも、事前登録なしで作れます。同じサーバーなら、別のアプリの人どうしで対戦できます。
+  </Card>
+  <Card title="REST + SSE" icon="seti:json">
+    操作は HTTP の POST、変化は SSE で受け取ります。切れても、連番で続きから再開できます。
+  </Card>
+  <Card title="連珠の規則を仕様に" icon="pencil">
+    禁手・自由打ち・Taraguchi-10・Swap2 など、連珠と五目並べの規則と開局を、仕様に含めています。
+  </Card>
+</CardGrid>

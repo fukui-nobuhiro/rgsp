@@ -1,0 +1,798 @@
+openapi: 3.1.0
+info:
+  title: RGSP — 連珠対局サーバープロトコル
+  version: 0.1.0-draft
+  description: |
+    連珠の対局サーバーの共通 API（v0.1 ドラフト）。公開用の仕様書（`rgsp-public-spec.md`）と食い違ったら、仕様書が正。
+    - ユーザーはアプリで「対局するサーバー」を選ぶ。アカウント・ロビー・レーティングはサーバーごと。
+    - 認証は OAuth 2.0 認可コード＋PKCE（ログイン画面はサーバーが決める）。このファイルは Bearer 以降を定義する。
+    - 座標は 1 始まり、x は左から A〜O、y は上から。天元は (8, 8)。
+    - アプリ（ブラウザ以外）は、すべてのリクエストの `User-Agent` に、サイトの URL・アプリ名・連絡先のメールのいずれかを入れる（MUST）。ブラウザのアプリは `Origin` で識別する。
+    - Bearer のトークンは、OAuth で得たもののほか、ユーザー自身のスクリプト・Bot 向けの個人用トークン（任意の機能）も使える。
+servers:
+  - url: https://game.example.com/v1
+    description: 各サーバーの api_base（/.well-known/renju-game-server で公開）
+tags:
+  - name: meta
+  - name: rules
+  - name: auth
+  - name: players
+  - name: games
+  - name: lobby
+security:
+  - bearer: []
+
+paths:
+  /meta:
+    get:
+      tags: [meta]
+      summary: サーバーの情報・上限・サーバー時刻
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServerMeta' }
+
+  /rules/judge:
+    post:
+      tags: [rules]
+      summary: ステートレスな規則判定（禁手点の一覧つき）
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/JudgeRequest' }
+      responses:
+        '200':
+          description: 判定結果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/JudgeResponse' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /auth/guest:
+    post:
+      tags: [auth]
+      summary: ゲストのプレイヤーを作る（features.guest が true のサーバーのみ）
+      security: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                display_name: { type: string, maxLength: 40 }
+      responses:
+        '201':
+          description: ゲストのトークン（レートなし・数時間で失効）
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token, expires_in, player]
+                properties:
+                  access_token: { type: string }
+                  expires_in: { type: integer, description: 秒 }
+                  player: { $ref: '#/components/schemas/Player' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /players/me:
+    get:
+      tags: [players]
+      summary: 自分のプレイヤー情報とレーティング
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Player' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /players/{playerId}:
+    get:
+      tags: [players]
+      summary: 公開プロフィール・レーティング
+      security: []
+      parameters:
+        - { name: playerId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Player' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /games:
+    post:
+      tags: [games]
+      summary: 対局を作る（相手指定・募集・リンク）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateGameRequest' }
+      responses:
+        '201':
+          description: 作成した対局（相手が未定なら status=waiting）
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Game' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    get:
+      tags: [games]
+      summary: 観戦一覧（visibility=public のもの）
+      security: []
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [live, finished] } }
+        - { name: rule, in: query, schema: { $ref: '#/components/schemas/Rule' } }
+        - { name: cursor, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [games]
+                properties:
+                  games:
+                    type: array
+                    items: { $ref: '#/components/schemas/GameSummary' }
+                  next_cursor: { type: [string, 'null'] }
+
+  /games/{gameId}:
+    get:
+      tags: [games]
+      summary: 対局のスナップショット（公開は認証不要）
+      security: [ {}, { bearer: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/GameId' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Game' }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /games/{gameId}/actions:
+    post:
+      tags: [games]
+      summary: 着手・開局の操作・投了・引き分け等
+      parameters:
+        - { $ref: '#/components/parameters/GameId' }
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: { type: string, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/Action' }
+      responses:
+        '200':
+          description: 適用後の状態
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [state, seq]
+                properties:
+                  state: { $ref: '#/components/schemas/Game' }
+                  seq: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /games/{gameId}/stream:
+    get:
+      tags: [games]
+      summary: SSE（接続直後に game.state を 1 件、その後は差分）
+      security: [ {}, { bearer: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/GameId' }
+        - name: Last-Event-ID
+          in: header
+          required: false
+          schema: { type: string }
+          description: 最後に受け取った seq。欠けた分を再送する
+      responses:
+        '200':
+          description: |
+            `text/event-stream`。イベント名: `game.state` / `move` / `opening` / `offer` / `presence` / `game.end`。
+            各 `data:` は GameEvent（JSON）。
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /games/{gameId}/record:
+    get:
+      tags: [games]
+      summary: 棋譜の書き出し
+      security: [ {}, { bearer: [] } ]
+      parameters:
+        - { $ref: '#/components/parameters/GameId' }
+        - name: format
+          in: query
+          schema: { type: string, enum: [json, text, sgf, psq], default: json }
+      responses:
+        '200':
+          description: 棋譜
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Record' }
+            text/plain:
+              schema: { type: string }
+        '404': { $ref: '#/components/responses/Problem' }
+
+  /challenges:
+    post:
+      tags: [lobby]
+      summary: 対局を募集する
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateGameRequest' }
+      responses:
+        '201':
+          description: 募集
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Challenge' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+    get:
+      tags: [lobby]
+      summary: 募集の一覧
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [challenges]
+                properties:
+                  challenges:
+                    type: array
+                    items: { $ref: '#/components/schemas/Challenge' }
+
+  /challenges/{challengeId}/accept:
+    post:
+      tags: [lobby]
+      summary: 募集に応募する（成立すると対局ができる）
+      parameters:
+        - { name: challengeId, in: path, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: 成立した対局
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Game' }
+        '404': { $ref: '#/components/responses/Problem' }
+        '409': { $ref: '#/components/responses/Problem' }
+
+  /stream/events:
+    get:
+      tags: [lobby]
+      summary: 自分宛のイベント（SSE）
+      responses:
+        '200':
+          description: |
+            `text/event-stream`。イベント名: `challenge.received` / `challenge.accepted` / `game.start`。
+          content:
+            text/event-stream:
+              schema: { type: string }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /ratings:
+    get:
+      tags: [lobby]
+      summary: サーバーのレーティング上位
+      security: []
+      parameters:
+        - { name: rule, in: query, schema: { $ref: '#/components/schemas/Rule' } }
+        - { name: format, in: query, schema: { type: string, enum: [realtime, correspondence], default: realtime } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ratings]
+                properties:
+                  ratings:
+                    type: array
+                    items:
+                      type: object
+                      required: [player, rating]
+                      properties:
+                        player: { $ref: '#/components/schemas/PlayerRef' }
+                        rating: { $ref: '#/components/schemas/Rating' }
+
+components:
+  securitySchemes:
+    bearer:
+      type: http
+      scheme: bearer
+      description: |
+        そのサーバーが発行したアクセストークン（OAuth 2.0 認可コード＋PKCE、またはゲスト）。他のサーバーには送らない。
+        scope: game:read / game:play / lobby:write / rating:read。
+
+  parameters:
+    GameId:
+      name: gameId
+      in: path
+      required: true
+      schema: { type: string }
+
+  responses:
+    Problem:
+      description: エラー（application/problem+json。アプリは code で判断する）
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: トークンが無い・不正・期限切れ
+      headers:
+        WWW-Authenticate:
+          schema: { type: string, example: 'Bearer error="invalid_token"' }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    RateLimited:
+      description: 制限超過
+      headers:
+        Retry-After:
+          schema: { type: integer }
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        code:
+          type: string
+          description: |
+            invalid_token / forbidden / not_found / not_your_turn / stale_move / illegal_move /
+            forbidden_point / invalid_action_for_phase / game_over / rate_limited / unsupported_rule
+        detail: { type: string }
+
+    Rule:
+      type: string
+      description: 規則名。未知の規則名（x. で始まる拡張を含む）は、対応していないものとして扱う
+      examples: [renju, renju.free, renju.taraguchi10, gomoku, gomoku.swap2]
+
+    Color:
+      type: string
+      enum: [black, white]
+
+    Point:
+      type: object
+      required: [x, y]
+      properties:
+        x: { type: integer, minimum: 1, maximum: 15, description: 左から A〜O }
+        y: { type: integer, minimum: 1, maximum: 15, description: 上から }
+
+    Move:
+      type: object
+      required: [n, x, y, color]
+      properties:
+        n: { type: integer, minimum: 1 }
+        x: { type: integer, minimum: 1, maximum: 15 }
+        y: { type: integer, minimum: 1, maximum: 15 }
+        color: { $ref: '#/components/schemas/Color' }
+        t_ms: { type: integer, minimum: 0, description: その手に使った時間（ミリ秒） }
+
+    Result:
+      type: object
+      required: [winner, reason]
+      properties:
+        winner: { type: string, enum: [black, white, draw, none] }
+        reason:
+          type: string
+          enum: [five, resign, timeout, forfeit, disconnect, agreement, board_full, aborted]
+
+    ClockConfig:
+      type: object
+      required: [initial_ms]
+      properties:
+        initial_ms: { type: integer, minimum: 1000 }
+        increment_ms: { type: integer, minimum: 0, default: 0 }
+
+    Clock:
+      type: object
+      required: [black_ms, white_ms, running, as_of]
+      properties:
+        black_ms: { type: integer }
+        white_ms: { type: integer }
+        running: { type: [string, 'null'], enum: [black, white, null] }
+        as_of: { type: string, format: date-time, description: 'この時刻の値。残り = ms − (サーバー時刻 − as_of)' }
+
+    Rating:
+      type: object
+      required: [rating, rd, games_played, provisional]
+      properties:
+        rule: { $ref: '#/components/schemas/Rule' }
+        format: { type: string, enum: [realtime, correspondence] }
+        rating: { type: integer }
+        rd: { type: integer }
+        games_played: { type: integer }
+        provisional: { type: boolean }
+
+    PlayerRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { type: string, enum: [human, bot, guest], default: human }
+        badges:
+          type: array
+          items: { $ref: '#/components/schemas/Badge' }
+          description: このサーバーが付けた印。表示専用で、対局・マッチング・レーティングには影響しない
+
+    Badge:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          description: |
+            標準の ID は `supporter`（このサーバーの運営を支援した人）。
+            サーバー独自の印は `x.` で始める（例 `x.tournament-winner-2026`）。
+            アプリが知らない ID は、`label` があればそれを表示し、なければ無視してよい。
+          examples: [supporter, x.tournament-winner-2026]
+        label:
+          type: string
+          description: 表示名。サーバーが言語に合わせて返してよい
+        since:
+          type: [string, 'null']
+          format: date-time
+
+    Player:
+      allOf:
+        - { $ref: '#/components/schemas/PlayerRef' }
+        - type: object
+          properties:
+            ratings:
+              type: array
+              items: { $ref: '#/components/schemas/Rating' }
+              description: レーティングはこのサーバー内の値。他のサーバーとは比較できない
+
+    CreateGameRequest:
+      type: object
+      required: [rule, clock]
+      properties:
+        rule: { $ref: '#/components/schemas/Rule' }
+        clock: { $ref: '#/components/schemas/ClockConfig' }
+        rated: { type: boolean, default: false }
+        visibility: { type: string, enum: [private, unlisted, public], default: public }
+        color: { type: string, enum: [black, white, random], default: random }
+        opponent:
+          description: 相手。player_id を指定すると指名、open なら募集、link なら招待リンク
+          oneOf:
+            - type: object
+              required: [player_id]
+              properties: { player_id: { type: string } }
+            - type: object
+              required: [open]
+              properties: { open: { const: true } }
+            - type: object
+              required: [link]
+              properties: { link: { const: true } }
+
+    Challenge:
+      type: object
+      required: [id, creator, rule, clock, status]
+      properties:
+        id: { type: string }
+        creator: { $ref: '#/components/schemas/PlayerRef' }
+        rule: { $ref: '#/components/schemas/Rule' }
+        clock: { $ref: '#/components/schemas/ClockConfig' }
+        rated: { type: boolean }
+        status: { type: string, enum: [open, accepted, expired, cancelled] }
+        expires_at: { type: string, format: date-time }
+        invite_url: { type: string, format: uri }
+
+    GameSummary:
+      type: object
+      required: [id, rule, status, players]
+      properties:
+        id: { type: string }
+        rule: { $ref: '#/components/schemas/Rule' }
+        status: { type: string, enum: [waiting, live, finished] }
+        players:
+          type: object
+          properties:
+            black: { $ref: '#/components/schemas/PlayerRef' }
+            white: { $ref: '#/components/schemas/PlayerRef' }
+        move_count: { type: integer }
+        rated: { type: boolean }
+
+    Game:
+      type: object
+      required: [v, id, rule, status, players, moves, turn, phase]
+      properties:
+        v: { type: integer, const: 1 }
+        id: { type: string }
+        rule: { $ref: '#/components/schemas/Rule' }
+        status: { type: string, enum: [waiting, live, finished] }
+        visibility: { type: string, enum: [private, unlisted, public] }
+        rated: { type: boolean }
+        clock_config: { $ref: '#/components/schemas/ClockConfig' }
+        clock: { $ref: '#/components/schemas/Clock' }
+        players:
+          type: object
+          properties:
+            black: { $ref: '#/components/schemas/PlayerRef' }
+            white: { $ref: '#/components/schemas/PlayerRef' }
+        moves:
+          type: array
+          items: { $ref: '#/components/schemas/Move' }
+        turn: { type: [string, 'null'], enum: [black, white, null] }
+        phase:
+          type: string
+          description: |
+            開局フェーズ。例: move_1 / swap_1 / move_5_choice / candidates_input / candidate_select /
+            place_3 / swap2_choice / place_2 / color_choice / playing
+        candidates:
+          type: array
+          items: { $ref: '#/components/schemas/Point' }
+        pending_offer:
+          type: [object, 'null']
+          properties:
+            kind: { type: string, enum: [draw, takeback] }
+            by: { $ref: '#/components/schemas/Color' }
+        result: { $ref: '#/components/schemas/Result' }
+        seq: { type: integer, description: 最後のイベントの連番 }
+        server_time: { type: string, format: date-time }
+
+    Action:
+      description: type で分ける判別共用体
+      oneOf:
+        - type: object
+          required: [type, x, y]
+          properties:
+            type: { const: move }
+            x: { type: integer, minimum: 1, maximum: 15 }
+            y: { type: integer, minimum: 1, maximum: 15 }
+            expect_move_number: { type: integer, description: 期待する次の手数。合わなければ 409 stale_move }
+        - type: object
+          required: [type, decision]
+          properties:
+            type: { const: swap_decision }
+            decision: { type: string, enum: [swap, stay] }
+        - type: object
+          required: [type, color]
+          properties:
+            type: { const: choose_color }
+            color: { $ref: '#/components/schemas/Color' }
+        - type: object
+          required: [type, branch]
+          properties:
+            type: { const: choose_branch }
+            branch: { type: string, enum: [regular, candidates] }
+        - type: object
+          required: [type, points]
+          properties:
+            type: { const: submit_candidates }
+            points:
+              type: array
+              items: { $ref: '#/components/schemas/Point' }
+        - type: object
+          required: [type, index]
+          properties:
+            type: { const: select_candidate }
+            index: { type: integer, minimum: 0 }
+        - type: object
+          required: [type, route]
+          properties:
+            type: { const: swap2_choice }
+            route: { type: string, enum: [A, B, C] }
+        - type: object
+          required: [type]
+          properties:
+            type:
+              enum: [resign, draw_offer, draw_accept, draw_decline, takeback_offer, takeback_accept, takeback_decline, claim_disconnect_win]
+      discriminator:
+        propertyName: type
+
+    GameEvent:
+      description: SSE の data。イベント名は「event」行に書く（game.state / move / opening / offer / presence / game.end）
+      type: object
+      required: [v, seq]
+      properties:
+        v: { type: integer, const: 1 }
+        seq: { type: integer, minimum: 0 }
+        game_id: { type: string }
+        state: { $ref: '#/components/schemas/Game' }
+        move: { $ref: '#/components/schemas/Move' }
+        action: { $ref: '#/components/schemas/Action' }
+        turn: { type: [string, 'null'], enum: [black, white, null] }
+        phase: { type: string }
+        clock: { $ref: '#/components/schemas/Clock' }
+        players:
+          type: object
+          description: スワップで入れ替わったあとの、色ごとのプレイヤー ID
+          properties:
+            black: { type: string }
+            white: { type: string }
+        result: { $ref: '#/components/schemas/Result' }
+        rating:
+          type: object
+          properties:
+            black: { $ref: '#/components/schemas/RatingChange' }
+            white: { $ref: '#/components/schemas/RatingChange' }
+        server_time: { type: string, format: date-time }
+
+    RatingChange:
+      type: object
+      properties:
+        before: { type: integer }
+        after: { type: integer }
+
+    Record:
+      type: object
+      required: [v, id, rule, board_size, players, moves, result]
+      properties:
+        v: { type: integer, const: 1 }
+        id: { type: string }
+        server: { type: string, format: uri }
+        rule: { $ref: '#/components/schemas/Rule' }
+        board_size: { type: integer, const: 15 }
+        clock: { $ref: '#/components/schemas/ClockConfig' }
+        players:
+          type: object
+          properties:
+            black: { $ref: '#/components/schemas/RecordPlayer' }
+            white: { $ref: '#/components/schemas/RecordPlayer' }
+        moves:
+          type: array
+          items: { $ref: '#/components/schemas/Move' }
+        opening_actions:
+          type: array
+          items:
+            type: object
+            required: [after_move, type]
+            properties:
+              after_move: { type: integer }
+              type: { type: string }
+              decision: { type: string }
+              points:
+                type: array
+                items: { $ref: '#/components/schemas/Point' }
+              selected: { type: integer }
+        result: { $ref: '#/components/schemas/Result' }
+        rated: { type: boolean }
+        started_at: { type: string, format: date-time }
+        ended_at: { type: string, format: date-time }
+
+    RecordPlayer:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        rating: { type: integer }
+
+    JudgeRequest:
+      type: object
+      required: [rule, moves]
+      properties:
+        rule: { $ref: '#/components/schemas/Rule' }
+        moves:
+          type: array
+          items: { $ref: '#/components/schemas/Point' }
+        opening_actions:
+          type: array
+          description: スワップなど色が入れ替わる規則で、棋譜 JSON の opening_actions と同じ形
+          items: { type: object }
+        candidate:
+          $ref: '#/components/schemas/Point'
+
+    JudgeResponse:
+      type: object
+      required: [legal, next_color, phase, forbidden_points]
+      properties:
+        legal: { type: [boolean, 'null'], description: candidate を指定したときだけ有効 }
+        reason: { type: [string, 'null'] }
+        next_color: { type: [string, 'null'], enum: [black, white, null] }
+        phase: { type: string }
+        forbidden_points:
+          type: array
+          items:
+            type: object
+            required: [x, y, kind]
+            properties:
+              x: { type: integer }
+              y: { type: integer }
+              kind: { type: string, enum: [double_three, double_four, overline] }
+        winner:
+          type: [string, 'null']
+          enum: [black, white, draw, null]
+
+    ServerMeta:
+      type: object
+      required: [protocol, versions, name, operator, api_base, rules, features, auth, rating]
+      properties:
+        protocol: { type: string, const: rgsp }
+        versions:
+          type: array
+          items: { type: string }
+        name: { type: string }
+        operator:
+          type: object
+          required: [name]
+          properties:
+            name: { type: string }
+            url: { type: string, format: uri }
+            contact: { type: string }
+        api_base: { type: string, format: uri }
+        rules:
+          type: array
+          items: { $ref: '#/components/schemas/Rule' }
+        features:
+          type: object
+          properties:
+            guest: { type: boolean }
+            rated: { type: boolean }
+            lobby: { type: boolean }
+            spectate: { type: boolean }
+            bots: { type: boolean }
+        auth:
+          type: object
+          properties:
+            authorization_endpoint: { type: string, format: uri }
+            token_endpoint: { type: string, format: uri }
+            guest_endpoint: { type: string, format: uri }
+            personal_token_url: { type: string, format: uri, description: ログイン中のユーザーが個人用トークンを作る画面の URL（任意の機能） }
+            scopes:
+              type: array
+              items: { type: string }
+        rating:
+          type: object
+          properties:
+            algorithm: { type: string, examples: [glicko2] }
+            initial: { type: integer }
+            scope: { type: string, const: server }
+        limits:
+          type: object
+          additionalProperties: true
+        terms_url: { type: string, format: uri }
+        support:
+          type: object
+          description: 運営への支援（寄付）の案内。任意。アプリは、選ばれたサーバーの分を表示するのが推奨（必須ではない）
+          required: [url]
+          properties:
+            url: { type: string, format: uri, description: 運営者が管理する https の URL }
+            message: { type: string, description: 短い案内文（長さの目安は 140 字以内） }
+        conformance:
+          type: object
+          description: 自己申告。「準拠」の印はディレクトリ（ふくふく）が付ける
+          properties:
+            level: { type: string, enum: [core, play, lobby] }
+            suite_version: { type: string }
+        server_time: { type: string, format: date-time }

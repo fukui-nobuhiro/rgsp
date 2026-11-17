@@ -1,0 +1,21 @@
+{
+  "name": "rgsp-site",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "astro dev",
+    "build:reference": "cp node_modules/redoc/bundles/redoc.standalone.js public/reference/redoc.standalone.js",
+    "build": "npm run build:reference && astro build",
+    "preview": "astro preview",
+    "deploy": "npm run build && wrangler deploy"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.43.1",
+    "astro": "7.4.12",
+    "redoc": "^2.5.4"
+  },
+  "devDependencies": {
+    "wrangler": "4.163.0"
+  }
+}

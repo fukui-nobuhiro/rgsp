@@ -1,0 +1,139 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap');
+
+/* ---- 文字：本文 14px を基準にした、小さめで軽い組み ---- */
+:root {
+  --sl-font: 'Noto Sans JP', system-ui, sans-serif;
+  --sl-text-xs: 0.6875rem;   /* 11px */
+  --sl-text-sm: 0.75rem;     /* 12px */
+  --sl-text-body-sm: 0.8125rem; /* 13px */
+  --sl-text-body: 0.875rem;  /* 14px */
+  --sl-text-base: 0.875rem;
+  --sl-text-lg: 1rem;
+  --sl-text-xl: 1.125rem;
+  --sl-text-2xl: 1.25rem;
+  --sl-text-3xl: 1.5rem;
+  --sl-text-4xl: 1.75rem;
+  --sl-text-5xl: 2rem;
+  --sl-text-h1: 1.625rem;    /* 26px */
+  --sl-text-h2: 1.25rem;     /* 20px */
+  --sl-text-h3: 1.0625rem;   /* 17px */
+  --sl-text-h4: 0.9375rem;   /* 15px */
+  --sl-text-h5: 0.875rem;
+  --sl-line-height: 1.8;
+  --sl-line-height-headings: 1.4;
+  --sl-content-width: 44rem;
+  --sl-sidebar-width: 14.5rem;
+  --sl-nav-height: 3.25rem;
+  --sl-content-pad-x: 1.5rem;
+}
+
+/* ---- 色：無彩色（グレースケール） ---- */
+:root,
+:root[data-theme='light'] {
+  --sl-color-white: #111111;
+  --sl-color-gray-1: #262626;
+  --sl-color-gray-2: #3d3d3d;
+  --sl-color-gray-3: #666666;
+  --sl-color-gray-4: #999999;
+  --sl-color-gray-5: #dcdcdc;
+  --sl-color-gray-6: #f1f1f1;
+  --sl-color-gray-7: #f8f8f8;
+  --sl-color-black: #ffffff;
+  --sl-color-accent-low: #efefef;
+  --sl-color-accent: #333333;
+  --sl-color-accent-high: #111111;
+  --sl-color-text-accent: #111111;
+  --sl-color-bg-nav: #ffffff;
+  --sl-color-bg-sidebar: #ffffff;
+  --sl-color-hairline: #e6e6e6;
+  --sl-color-hairline-light: #efefef;
+  --sl-color-hairline-shade: #e0e0e0;
+}
+:root[data-theme='dark'] {
+  --sl-color-white: #f2f2f2;
+  --sl-color-gray-1: #e0e0e0;
+  --sl-color-gray-2: #bdbdbd;
+  --sl-color-gray-3: #8f8f8f;
+  --sl-color-gray-4: #666666;
+  --sl-color-gray-5: #333333;
+  --sl-color-gray-6: #222222;
+  --sl-color-gray-7: #181818;
+  --sl-color-black: #101010;
+  --sl-color-accent-low: #2a2a2a;
+  --sl-color-accent: #d0d0d0;
+  --sl-color-accent-high: #ffffff;
+  --sl-color-text-accent: #ffffff;
+  --sl-color-bg-nav: #101010;
+  --sl-color-bg-sidebar: #101010;
+  --sl-color-hairline: #2a2a2a;
+  --sl-color-hairline-light: #222222;
+  --sl-color-hairline-shade: #1c1c1c;
+}
+
+body { font-size: var(--sl-text-body); letter-spacing: 0.01em; -webkit-font-smoothing: antialiased; }
+:lang(ja) { word-break: auto-phrase; }
+
+/* ---- ロゴ・ヘッダー：細く、飾りなし ---- */
+.site-title, .site-title span { font-family: 'Noto Sans JP', system-ui, sans-serif; font-weight: 400; font-size: 0.9375rem; letter-spacing: 0.04em; }
+header.header { border-bottom-color: var(--sl-color-hairline); }
+site-search button { border-radius: 4px; border-color: var(--sl-color-hairline); background: transparent; font-size: var(--sl-text-sm); }
+site-search button kbd { font-size: 0.6875rem; }
+
+/* ---- サイドバー：小さく、選択中は薄い灰色の地 ---- */
+.sidebar-content { font-size: var(--sl-text-body-sm); }
+.sidebar-content a { font-size: 0.8125rem; padding: 0.3rem 0.75rem; border-radius: 4px; color: var(--sl-color-gray-3); }
+.sidebar-content a:hover { color: var(--sl-color-white); }
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover {
+  background-color: var(--sl-color-gray-6);
+  color: var(--sl-color-white);
+  font-weight: 500;
+}
+.sidebar-content summary { font-size: var(--sl-text-sm); letter-spacing: 0.06em; color: var(--sl-color-gray-3); }
+.sidebar-content summary .large { font-weight: 500; }
+.sidebar-content ul ul { border-inline-start-color: var(--sl-color-hairline); }
+
+/* ---- 本文：見出しは軽く、区切りは細く ---- */
+h1, h2, h3, h4,
+.sl-markdown-content :is(h1, h2, h3, h4) {
+  font-family: 'Noto Sans JP', system-ui, sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+.sl-markdown-content :is(h2) { margin-top: 3rem; }
+.sl-markdown-content :is(h3) { margin-top: 2rem; }
+.sl-markdown-content strong { font-weight: 500; }
+.sl-markdown-content a:not(.sl-link-button) { text-decoration-color: var(--sl-color-gray-5); text-underline-offset: 0.2em; }
+.sl-markdown-content a:not(.sl-link-button):hover { text-decoration-color: var(--sl-color-white); }
+.sl-markdown-content blockquote, .sl-markdown-content blockquote p { font-size: var(--sl-text-body-sm); }
+.sl-markdown-content blockquote { border-inline-start: 2px solid var(--sl-color-gray-5); background: transparent; padding-inline-start: 1rem; color: var(--sl-color-gray-2); }
+.sl-markdown-content hr { border-color: var(--sl-color-hairline); }
+
+/* 表：罫線は横だけ。小さめ */
+.sl-markdown-content table { display: block; overflow-x: auto; font-size: var(--sl-text-body-sm); border: 0; }
+.sl-markdown-content :is(th, td) { padding: 0.5rem 0.75rem; border: 0; border-bottom: 1px solid var(--sl-color-hairline); }
+.sl-markdown-content th { font-weight: 500; color: var(--sl-color-gray-3); background: transparent; white-space: nowrap; }
+.sl-markdown-content tr:nth-child(2n) { background: transparent; }
+
+/* コード：薄い地に細い枠 */
+.sl-markdown-content :not(pre) > code { font-size: 0.8125em; padding: 0.1em 0.35em; border-radius: 3px; background: var(--sl-color-gray-6); border: 0; color: var(--sl-color-gray-1); }
+.sl-markdown-content pre { font-size: 0.78125rem; border-radius: 4px; background: var(--sl-color-gray-7); border: 1px solid var(--sl-color-hairline); }
+.expressive-code { --ec-brdRad: 4px; }
+
+/* 右の目次 */
+starlight-toc, .right-sidebar-panel { font-size: var(--sl-text-sm); }
+
+/* ---- トップ：小さな見出し、余白で見せる ---- */
+.hero { padding-block: clamp(2.5rem, 8vw, 5rem); gap: 1.5rem; }
+.hero h1 { font-family: 'Noto Sans JP', system-ui, sans-serif; font-weight: 500; font-size: clamp(1.5rem, 3.4vw, 2rem); letter-spacing: 0.02em; line-height: 1.4; }
+.hero .tagline { font-size: var(--sl-text-body); color: var(--sl-color-gray-3); max-width: 34rem; }
+.sl-link-button { font-size: var(--sl-text-body-sm); font-weight: 400; padding: 0.5rem 1.1rem; border-radius: 4px; }
+.sl-link-button.primary { background-color: var(--sl-color-accent); border-color: var(--sl-color-accent); color: var(--sl-color-black); }
+.sl-link-button.secondary { border-color: var(--sl-color-gray-5); color: var(--sl-color-white); }
+
+/* カード：枠と丸みをやめ、細い線だけ */
+.sl-markdown-content .card { border: 0; border-top: 1px solid var(--sl-color-hairline); border-radius: 0; background: transparent; padding: 1.25rem 0 0.25rem; box-shadow: none; }
+.sl-markdown-content .card .title { font-size: var(--sl-text-body); font-weight: 500; }
+.sl-markdown-content .card .icon { display: none; }
+.sl-markdown-content .card .body { margin-top: 0.4rem; font-size: var(--sl-text-body-sm); color: var(--sl-color-gray-3); }
+.sl-markdown-content .card-grid { gap: 1.5rem 3rem; }
