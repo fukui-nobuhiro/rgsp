@@ -391,7 +391,7 @@ components:
           type: string
           description: |
             invalid_token / forbidden / not_found / not_your_turn / stale_move / illegal_move /
-            forbidden_point / invalid_action_for_phase / game_over / rate_limited / unsupported_rule
+            forbidden_point / invalid_action_for_phase / game_over / rate_limited / unsupported_rule / clock_not_allowed
         detail: { type: string }
 
     Rule:
@@ -431,17 +431,24 @@ components:
 
     ClockConfig:
       type: object
-      required: [initial_ms]
+      description: |
+        `initial_ms` と `per_move_ms` の少なくとも 1 つは必須。
+        持ち時間が 0 になる、または一手が `per_move_ms` を超えたら、時間切れ。
+      anyOf:
+        - required: [initial_ms]
+        - required: [per_move_ms]
       properties:
-        initial_ms: { type: integer, minimum: 1000 }
-        increment_ms: { type: integer, minimum: 0, default: 0 }
+        initial_ms: { type: integer, minimum: 1000, description: 持ち時間（対局全体）。省略で全体の制限なし }
+        increment_ms: { type: integer, minimum: 0, default: 0, description: 1 手ごとの加算（持ち時間があるときだけ） }
+        per_move_ms: { type: integer, minimum: 1000, description: 一手の上限。手番ごとに戻る。省略で一手の制限なし }
 
     Clock:
       type: object
       required: [black_ms, white_ms, running, as_of]
       properties:
-        black_ms: { type: integer }
-        white_ms: { type: integer }
+        black_ms: { type: [integer, 'null'], description: 持ち時間の残り。initial_ms がなければ null }
+        white_ms: { type: [integer, 'null'], description: 持ち時間の残り。initial_ms がなければ null }
+        move_ms: { type: [integer, 'null'], description: 手番側のその手の残り。per_move_ms がなければ null }
         running: { type: [string, 'null'], enum: [black, white, null] }
         as_of: { type: string, format: date-time, description: 'この時刻の値。残り = ms − (サーバー時刻 − as_of)' }
 
@@ -794,6 +801,26 @@ components:
         limits:
           type: object
           additionalProperties: true
+        clocks:
+          type: object
+          description: このサーバーが出す時間設定。アプリはプリセットを選択肢として見せる
+          properties:
+            presets:
+              type: array
+              items:
+                type: object
+                required: [id, clock]
+                properties:
+                  id: { type: string }
+                  name: { type: string, description: 表示名（サーバーが決める） }
+                  clock: { $ref: '#/components/schemas/ClockConfig' }
+            custom:
+              type: object
+              description: プリセット以外の値を受け付けるか。範囲外は 422 clock_not_allowed
+              properties:
+                allowed: { type: boolean }
+                max_initial_ms: { type: integer }
+                max_per_move_ms: { type: integer }
         terms_url: { type: string, format: uri }
         support:
           type: object

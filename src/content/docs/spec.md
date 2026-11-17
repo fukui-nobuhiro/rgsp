@@ -117,6 +117,13 @@ curl https://game.example.com/v1/games/g_01JABCDEF/record?format=json
   },
   "rating": { "algorithm": "glicko2", "initial": 1500, "scope": "server" },
   "limits": { "max_concurrent_games_per_player": 3 },
+  "clocks": {
+    "presets": [
+      { "id": "fischer-5m", "name": "5分+3秒", "clock": { "initial_ms": 300000, "increment_ms": 3000 } },
+      { "id": "move-60s", "name": "一手60秒", "clock": { "per_move_ms": 60000 } }
+    ],
+    "custom": { "allowed": true, "max_initial_ms": 3600000, "max_per_move_ms": 600000 }
+  },
   "terms_url": "https://game.example.com/terms",
   "support": { "url": "https://game.example.com/support", "message": "このサーバーの運営を支援してください" },
   "conformance": { "level": "play", "suite_version": "0.1.0" },
@@ -331,8 +338,14 @@ data: {"v":1,"seq":31,"result":{"winner":"black","reason":"five"},"rating":{"bla
 ### 7.1 時計
 
 - 持ち時間は**サーバー時計だけ**で測る。通信の遅れの補償はしない（着手がサーバーに届いた時刻で数える）。
-- 表現: `{ "black_ms", "white_ms", "running": "black"|"white"|null, "as_of" }`。アプリは `残り = ms − (サーバー時刻 − as_of)` で自前に表示する。サーバーは、0.5 秒ごとの更新を送らなくてよい。
-- 増加秒（フィッシャー方式）を持てる。`clock_config`: `{ "initial_ms", "increment_ms" }`。
+- **設定**（`clock_config`）は、次の 3 つを自由に組める。**`initial_ms` と `per_move_ms` の少なくとも 1 つは必須。**
+  - `initial_ms`: 持ち時間（対局全体）。省略すると、全体の制限なし。
+  - `increment_ms`: 1 手ごとの加算（フィッシャー方式）。既定 0。持ち時間があるときだけ意味を持つ。
+  - `per_move_ms`: 一手の上限。手番ごとに毎回この値に戻る。省略すると、一手の制限なし。
+- 時間切れは、**持ち時間が 0 になったとき、または一手が `per_move_ms` を超えたとき**の早いほう。
+- 組み合わせの例: 5 分＋加算 3 秒 → `{"initial_ms":300000,"increment_ms":3000}`／一手 60 秒だけ → `{"per_move_ms":60000}`／持ち時間 10 分＋一手 30 秒まで → `{"initial_ms":600000,"per_move_ms":30000}`。
+- 表現: `{ "black_ms", "white_ms", "move_ms", "running": "black"|"white"|null, "as_of" }`。`black_ms`・`white_ms` は持ち時間の残り（`initial_ms` がなければ `null`）、`move_ms` は手番側のその手の残り（`per_move_ms` がなければ `null`）。アプリは `残り = ms − (サーバー時刻 − as_of)` で自前に表示する。サーバーは、0.5 秒ごとの更新を送らなくてよい。
+- **サーバーが出す時間設定は `meta.clocks` で公開する。** `presets` は、そのサーバーが勧める組（`id`・表示名・設定）。アプリは、これを選択肢として見せる。`custom` は、プリセット以外の値を受け付けるか（`allowed`）と、その上限。サーバーの国や好みに合わせて、プリセットを自由に決めてよい。範囲外は `422`（`clock_not_allowed`）。
 - 時間切れは、期限にサーバーが 1 度だけ判定して終局にする。サーバーが再起動したら、起動時に期限切れの対局を走査して処理する（MUST）。
 
 ### 7.2 開局フェーズ

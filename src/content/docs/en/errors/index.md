@@ -18,3 +18,4 @@ Errors are returned as `application/problem+json` (RFC 9457). Apps decide by `co
 | [`game_over`](./game-over/) | 409 | Game already ended |
 | [`rate_limited`](./rate-limited/) | 429 | Limit exceeded (`Retry-After`) |
 | [`unsupported_rule`](./unsupported-rule/) | 422 | Rule not supported by this server |
+| [`clock_not_allowed`](./clock-not-allowed/) | 422 | Time setting not accepted by this server |

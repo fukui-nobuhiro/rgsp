@@ -117,6 +117,13 @@ A server self-declares at `/.well-known/renju-game-server` on its own domain (JS
   },
   "rating": { "algorithm": "glicko2", "initial": 1500, "scope": "server" },
   "limits": { "max_concurrent_games_per_player": 3 },
+  "clocks": {
+    "presets": [
+      { "id": "fischer-5m", "name": "5 min + 3 s", "clock": { "initial_ms": 300000, "increment_ms": 3000 } },
+      { "id": "move-60s", "name": "60 s per move", "clock": { "per_move_ms": 60000 } }
+    ],
+    "custom": { "allowed": true, "max_initial_ms": 3600000, "max_per_move_ms": 600000 }
+  },
   "terms_url": "https://game.example.com/terms",
   "support": { "url": "https://game.example.com/support", "message": "Please support this server." },
   "conformance": { "level": "play", "suite_version": "0.1.0" },
@@ -331,8 +338,14 @@ A server MAY also serve the same URL as NDJSON. **SSE is required; NDJSON is opt
 ### 7.1 Clock
 
 - Time is measured **by the server clock only.** There is no network-lag compensation (time is counted at the moment a move reaches the server).
-- Representation: `{ "black_ms", "white_ms", "running": "black"|"white"|null, "as_of" }`. Apps display `remaining = ms − (server time − as_of)` on their own. Servers need not send updates every 0.5 s.
-- Increment (Fischer) is supported. `clock_config`: `{ "initial_ms", "increment_ms" }`.
+- **Configuration** (`clock_config`) combines three fields freely. **At least one of `initial_ms` and `per_move_ms` is required.**
+  - `initial_ms`: main time for the whole game. Omit for no total limit.
+  - `increment_ms`: time added after each move (Fischer). Default 0. Meaningful only with main time.
+  - `per_move_ms`: the limit for a single move. Resets every turn. Omit for no per-move limit.
+- A player loses on time when **main time reaches 0 or a single move exceeds `per_move_ms`**, whichever comes first.
+- Examples: 5 min + 3 s increment → `{"initial_ms":300000,"increment_ms":3000}`; 60 s per move only → `{"per_move_ms":60000}`; 10 min main with at most 30 s per move → `{"initial_ms":600000,"per_move_ms":30000}`.
+- Representation: `{ "black_ms", "white_ms", "move_ms", "running": "black"|"white"|null, "as_of" }`. `black_ms` / `white_ms` are the remaining main time (`null` without `initial_ms`); `move_ms` is the mover's remaining time for the current move (`null` without `per_move_ms`). Apps display `remaining = ms − (server time − as_of)` on their own. Servers need not send updates every 0.5 s.
+- **A server publishes the time settings it offers in `meta.clocks`.** `presets` are the settings the server recommends (`id`, display name, config); apps show them as choices. `custom` says whether values outside the presets are accepted (`allowed`) and their upper bounds. Servers may choose presets to suit their country and community. Out-of-range values get `422` (`clock_not_allowed`).
 - A timeout is judged once by the server at the deadline and ends the game. After a restart, the server MUST scan for expired games at startup and process them.
 
 ### 7.2 Opening phases
