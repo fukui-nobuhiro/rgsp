@@ -208,13 +208,23 @@ paths:
           required: false
           schema: { type: string }
           description: 最後に受け取った seq。欠けた分を再送する
+        - name: since
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0 }
+          description: NDJSON 用。最後に受け取った seq（`Last-Event-ID` の代わり）
       responses:
         '200':
           description: |
-            `text/event-stream`。イベント名: `game.state` / `move` / `opening` / `offer` / `presence` / `game.end`。
+            既定は `text/event-stream`（必須）。イベント名: `game.state` / `move` / `opening` / `offer` / `presence` / `game.end`。
             各 `data:` は GameEvent（JSON）。
+            `Accept: application/x-ndjson` のときは、NDJSON で返してよい（任意）。1 行が 1 イベントで、
+            GameEvent に、イベント名を入れた `type` を足したもの。空行はハートビート。
+            クライアントは、応答の `Content-Type` で形式を決める。
           content:
             text/event-stream:
+              schema: { type: string }
+            application/x-ndjson:
               schema: { type: string }
         '404': { $ref: '#/components/responses/Problem' }
 
@@ -294,9 +304,12 @@ paths:
       responses:
         '200':
           description: |
-            `text/event-stream`。イベント名: `challenge.received` / `challenge.accepted` / `game.start`。
+            `text/event-stream`（必須）。イベント名: `challenge.received` / `challenge.accepted` / `game.start`。
+            `Accept: application/x-ndjson` のときは NDJSON で返してよい（任意。形式は `/games/{gameId}/stream` と同じ）。
           content:
             text/event-stream:
+              schema: { type: string }
+            application/x-ndjson:
               schema: { type: string }
         '401': { $ref: '#/components/responses/Unauthorized' }
 

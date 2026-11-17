@@ -233,7 +233,7 @@ curl https://game.example.com/v1/games/g_01JABCDEF/record?format=json
 | `POST /games` | 対局を作る（相手指定・募集・リンク） | `game:play` | Play |
 | `GET /games/{id}` | 対局のスナップショット | 公開は不要 | Play |
 | `POST /games/{id}/actions` | 着手・開局の操作・投了・引き分け等（§6.3） | `game:play` | Play |
-| `GET /games/{id}/stream` | イベント（SSE。§6.4） | 公開は不要 | Play |
+| `GET /games/{id}/stream` | イベント（SSE。NDJSON は任意。§6.4） | 公開は不要 | Play |
 | `GET /games/{id}/record?format=` | 棋譜の書き出し（§8） | 公開は不要 | Play |
 | `GET /games?status=live` | 観戦一覧（カーソル式ページング） | 不要 | Play（`spectate`） |
 | `POST /challenges`／`GET /challenges`／`POST /challenges/{id}/accept` | 募集・一覧・応募 | `lobby:write` | Lobby |
@@ -311,6 +311,17 @@ data: {"v":1,"seq":31,"result":{"winner":"black","reason":"five"},"rating":{"bla
 - `seq` は 0 から連番。**飛んだら、アプリは `GET /games/{id}` で取り直す。** `Last-Event-ID` つきで再接続したら、サーバーは欠けた分を再送する（保持できない場合は、先頭に `game.state` を送る）。
 - 15〜30 秒ごとに `: ping` のコメント行を送る（SHOULD）。
 - `GET /stream/events` は、プレイヤー宛のイベント（`challenge.received`・`challenge.accepted`・`game.start`）を同じ形式で流す。
+
+#### NDJSON（任意）
+
+サーバーは、同じ URL で NDJSON でも配信してよい（MAY）。**SSE は必須、NDJSON は任意。**
+
+- クライアントが `Accept: application/x-ndjson` を送ったときだけ NDJSON で返す。それ以外（`Accept` なし・`text/event-stream`・`*/*`）は SSE で返す。
+- NDJSON を実装しないサーバーは、`Accept: application/x-ndjson` に SSE で返してよい。**クライアントは、応答の `Content-Type` を見て形式を決める。**
+- 1 行が 1 イベントで、中身は SSE の `data` と同じ JSON。**イベント名は `type` フィールドに入れる**（例: `{"type":"move","v":1,"seq":12,...}`）。
+- 接続直後に `game.state` を 1 行送る点、`seq` の意味、飛んだときの取り直しは SSE と同じ。
+- 再開は、`Last-Event-ID` ヘッダー、または `since=<seq>` クエリ（最後に受け取った `seq`）で行う。
+- 空行を、ハートビートとして 15〜30 秒ごとに送る（SHOULD）。受け取った側は、空行を無視する。
 
 ---
 
@@ -513,7 +524,7 @@ data: {"v":1,"seq":31,"result":{"winner":"black","reason":"five"},"rating":{"bla
 | サーバーの数 | 1 つ（`https://lichess.org`） | **仕様。誰でもサーバーを運営でき、アプリがサーバーを選ぶ** |
 | アカウントとレーティング | Lichess の 1 つの集合 | **サーバーごと** |
 | 対象 | チェスとその派生 | **連珠・五目並べ（禁手・開局規則を仕様に含む）** |
-| ストリーミング | HTTP の NDJSON（`application/x-ndjson`）。最初の行が `gameFull`、続いて `gameState`・`chatLine`・`opponentGone` | SSE。最初に `game.state` を送り、`Last-Event-ID` で再開できる（WebSocket は将来） |
+| ストリーミング | HTTP の NDJSON（`application/x-ndjson`）。最初の行が `gameFull`、続いて `gameState`・`chatLine`・`opponentGone` | SSE（必須）。最初に `game.state` を送り、`Last-Event-ID` で再開できる。同じ URL で NDJSON も任意で出せる（`Accept` で選ぶ。WebSocket は将来） |
 | 認証 | OAuth 2.0 認可コード＋PKCE。**アプリの登録は不要（任意の client id）**、`S256` のみ。アクセストークンは長命（約 1 年）で、リフレッシュトークンはない。**個人用アクセストークン**もある | OAuth 2.0 認可コード＋PKCE。アプリの登録は不要。トークンは短命で、リフレッシュトークンを使う。**個人用トークン**も任意で提供できる（§4.5） |
 | アプリの識別 | **`User-Agent` に、サイトの URL・アプリ名・連絡先メールのいずれかを必須**（連絡と、破壊的変更の知らせのため） | **同じく必須**（ブラウザのアプリは `Origin`）（§4.6） |
 | 着手の送り方 | `POST /api/board/game/{id}/move/{move}`（UCI 表記。引き分けの申し出は `offeringDraw`） | `POST /games/{id}/actions`（座標の JSON。`expect_move_number` で競合を検出） |
@@ -537,7 +548,7 @@ data: {"v":1,"seq":31,"result":{"winner":"black","reason":"five"},"rating":{"bla
 |---|---|
 | 名前 | RGSP（Renju Game Server Protocol） |
 | 構造 | 連合型。誰でもサーバーを運営でき、アプリはサーバーを選ぶ。アカウント・レーティングはサーバーごと |
-| 通信 | REST ＋ SSE（WebSocket は将来） |
+| 通信 | REST ＋ SSE（NDJSON は任意。WebSocket は将来） |
 | 規則 | 必須は `renju.free` と `gomoku`。禁手は着手を拒否 |
 | 時計 | 遅延補償なし |
 | 認証 | OAuth 2.0 ＋ PKCE。アプリの登録は不要。個人用トークンは任意。非ブラウザのアプリは `User-Agent` が必須 |

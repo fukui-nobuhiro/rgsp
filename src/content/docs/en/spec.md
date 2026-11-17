@@ -233,7 +233,7 @@ The base URL is `api_base`. All bodies are JSON. See [openapi.yaml](/openapi.yam
 | `POST /games` | Create a game (invite a player / open seek / link) | `game:play` | Play |
 | `GET /games/{id}` | Game snapshot | none if public | Play |
 | `POST /games/{id}/actions` | Move, opening actions, resign, draw, etc. (§6.3) | `game:play` | Play |
-| `GET /games/{id}/stream` | Events (SSE, §6.4) | none if public | Play |
+| `GET /games/{id}/stream` | Events (SSE; NDJSON optional, §6.4) | none if public | Play |
 | `GET /games/{id}/record?format=` | Export the record (§8) | none if public | Play |
 | `GET /games?status=live` | Live games to spectate (cursor paging) | none | Play (`spectate`) |
 | `POST /challenges` / `GET /challenges` / `POST /challenges/{id}/accept` | Seeks: create, list, accept | `lobby:write` | Lobby |
@@ -311,6 +311,17 @@ data: {"v":1,"seq":31,"result":{"winner":"black","reason":"five"},"rating":{"bla
 - `seq` is consecutive from 0. **On a gap, the app refetches `GET /games/{id}`.** On reconnecting with `Last-Event-ID`, the server resends the missed events (or, if it cannot retain them, starts with a `game.state`).
 - Send a `: ping` comment line every 15–30 seconds (SHOULD).
 - `GET /stream/events` streams player-addressed events (`challenge.received`, `challenge.accepted`, `game.start`) in the same format.
+
+#### NDJSON (optional)
+
+A server MAY also serve the same URL as NDJSON. **SSE is required; NDJSON is optional.**
+
+- Return NDJSON only when the client sends `Accept: application/x-ndjson`. Otherwise (no `Accept`, `text/event-stream`, or `*/*`) return SSE.
+- A server that does not implement NDJSON MAY answer `Accept: application/x-ndjson` with SSE. **Clients MUST decide the format from the response `Content-Type`.**
+- One line is one event, with the same JSON as the SSE `data`. **The event name goes in a `type` field** (e.g. `{"type":"move","v":1,"seq":12,...}`).
+- A `game.state` line comes first, `seq` means the same, and gap handling is the same as SSE.
+- Resume with the `Last-Event-ID` header or a `since=<seq>` query (the last `seq` received).
+- Send a blank line as a heartbeat every 15–30 seconds (SHOULD). Receivers ignore blank lines.
 
 ---
 
@@ -513,7 +524,7 @@ Lichess (chess) publishes an API so that third-party apps can use it. This secti
 | Number of servers | One (`https://lichess.org`) | **A specification. Anyone can run a server; apps let users choose** |
 | Accounts and ratings | One pool at Lichess | **Per server** |
 | Domain | Chess and variants | **Renju / Gomoku (forbidden moves and opening rules are part of the spec)** |
-| Streaming | HTTP NDJSON (`application/x-ndjson`). The first line is `gameFull`, then `gameState`, `chatLine`, `opponentGone` | SSE. A `game.state` comes first; resume via `Last-Event-ID` (WebSocket later) |
+| Streaming | HTTP NDJSON (`application/x-ndjson`). The first line is `gameFull`, then `gameState`, `chatLine`, `opponentGone` | SSE (required). A `game.state` comes first; resume via `Last-Event-ID`. NDJSON is optional on the same URL, chosen by `Accept` (WebSocket later) |
 | Authentication | OAuth 2.0 authorization code + PKCE. **No app registration (any client id)**, `S256` only. Access tokens are long-lived (about a year); no refresh tokens. **Personal access tokens** also exist | OAuth 2.0 authorization code + PKCE; no app registration. Tokens are short-lived with refresh tokens. **Personal tokens** may optionally be offered (§4.5) |
 | App identification | **`User-Agent` must carry the site URL, app name or a contact email** (so they can contact developers and announce breaking changes) | **Also required** (browser apps use `Origin`) (§4.6) |
 | Sending a move | `POST /api/board/game/{id}/move/{move}` (UCI notation; draw offers via `offeringDraw`) | `POST /games/{id}/actions` (JSON coordinates; `expect_move_number` detects conflicts) |
@@ -537,7 +548,7 @@ In short, Lichess is "one service's API", while RGSP is "**a common spec for man
 |---|---|
 | Name | RGSP (Renju Game Server Protocol) |
 | Structure | Federated: anyone can run a server, apps let users choose. Accounts and ratings are per server |
-| Transport | REST + SSE (WebSocket later) |
+| Transport | REST + SSE (NDJSON optional; WebSocket later) |
 | Rules | `renju.free` and `gomoku` are required. Forbidden moves are rejected |
 | Clock | No lag compensation |
 | Auth | OAuth 2.0 + PKCE; no app registration. Personal tokens are optional. Non-browser apps MUST send a `User-Agent` |
