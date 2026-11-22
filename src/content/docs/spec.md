@@ -107,7 +107,7 @@ curl https://game.example.com/v1/games/g_01JABCDEF/record?format=json
   "operator": { "name": "Example", "url": "https://example.com", "contact": "mailto:ops@example.com" },
   "api_base": "https://game.example.com/v1",
   "rules": ["renju.free", "renju.taraguchi10", "gomoku", "gomoku.swap2"],
-  "features": { "guest": true, "rated": true, "lobby": true, "spectate": true, "bots": true },
+  "features": { "guest": true, "rated": true, "lobby": true, "matchmaking": true, "spectate": true, "bots": true },
   "auth": {
     "authorization_endpoint": "https://game.example.com/oauth/authorize",
     "token_endpoint": "https://game.example.com/oauth/token",
@@ -127,6 +127,13 @@ curl https://game.example.com/v1/games/g_01JABCDEF/record?format=json
     "description_url": "https://game.example.com/docs/rating"
   },
   "limits": { "max_concurrent_games_per_player": 3 },
+  "matchmaking": {
+    "ticket_ttl_s": 120,
+    "pools": [
+      { "rule": "renju.free", "clock_preset": "fischer-5m" },
+      { "rule": "renju.free", "clock_preset": "move-60s" }
+    ]
+  },
   "clocks": {
     "presets": [
       { "id": "fischer-5m", "name": "5分+3秒", "clock": { "initial_ms": 300000, "increment_ms": 3000 } },
@@ -253,11 +260,12 @@ curl https://game.example.com/v1/games/g_01JABCDEF/record?format=json
 | `GET /games/{id}/stream` | イベント（SSE。NDJSON は任意。§6.4） | 公開は不要 | Play |
 | `GET /games/{id}/record?format=` | 棋譜の書き出し（§8） | 公開は不要 | Play |
 | `GET /games?status=live` | 観戦一覧（カーソル式ページング） | 不要 | Play（`spectate`） |
-| `POST /challenges`／`GET /challenges`／`POST /challenges/{id}/accept` | 募集・一覧・応募 | `lobby:write` | Lobby |
+| `POST /challenges`／`GET /challenges`／`POST /challenges/{id}/accept` | ロビー式: 募集・一覧・応募（§6.5） | `lobby:write` | Lobby（`features.lobby`） |
+| `POST /matchmaking`／`GET /matchmaking/{id}`／`DELETE /matchmaking/{id}` | オートマッチ: 待ち行列に入る・状態・取り消し（§6.5） | `lobby:write` | Lobby（`features.matchmaking`） |
 | `GET /stream/events` | 自分宛のイベント（挑戦を受けた・対局が始まった） | `game:read` | Lobby |
 | `GET /ratings?rule=&format=` | サーバーのレーティング上位 | 不要 | Lobby（任意） |
 
-**準拠レベル**: **Core**（`meta`・`rules/judge`・棋譜の取得）／**Play**（Core＋対局・SSE・観戦）／**Lobby**（Play＋募集・応募・レーティング）。
+**準拠レベル**: **Core**（`meta`・`rules/judge`・棋譜の取得）／**Play**（Core＋対局・SSE・観戦）／**Lobby**（Play＋ロビー式かオートマッチの少なくとも 1 つ。公開した機能（`features.lobby`・`features.matchmaking`）は、実装してテストを通す）。
 
 ### 6.2 規則判定 `POST /rules/judge`
 
@@ -339,6 +347,25 @@ data: {"v":1,"seq":31,"result":{"winner":"black","reason":"five"},"rating":{"bla
 - 接続直後に `game.state` を 1 行送る点、`seq` の意味、飛んだときの取り直しは SSE と同じ。
 - 再開は、`Last-Event-ID` ヘッダー、または `since=<seq>` クエリ（最後に受け取った `seq`）で行う。
 - 空行を、ハートビートとして 15〜30 秒ごとに送る（SHOULD）。受け取った側は、空行を無視する。
+
+### 6.5 対局の探し方（ロビー式・オートマッチ）
+
+**どちらも任意。** サーバーは、`features.lobby`・`features.matchmaking` で、やるほうを公開する（両方でもよい）。アプリは、公開された機能に合わせて画面を出す。国や好みで好まれる遊び方が違うので、仕様は両方を用意し、どちらを使うかは各サーバーが決める。
+
+#### ロビー式（`features.lobby`）
+
+`POST /challenges` で募集を出し、`GET /challenges` で一覧を見て、`POST /challenges/{id}/accept` で応募する。募集には、規則・時間設定・レート有無を書く。誰かが応募すると対局ができ、募集した側に `challenge.accepted`・`game.start` が届く。
+
+#### オートマッチ（`features.matchmaking`）
+
+待ち行列に入り、サーバーが相手を決める。
+
+- `POST /matchmaking`: `{ "rule", "clock_preset", "rated" }` を送る。**`clock_preset` は、`meta.clocks.presets` の `id`**（同じ設定の人どうしを組むため。自由な時間設定は使えない）。`202` で `{ "ticket_id", "status": "queued", "expires_at" }` を返す。
+- 相手が決まったら、`/stream/events` に `game.start`（`game_id` つき）が届く。`GET /matchmaking/{ticket_id}` でも、`status`（`queued`・`matched`・`cancelled`・`expired`）と、成立した `game_id` を取れる。
+- `DELETE /matchmaking/{ticket_id}`: 取り消し。
+- 同じプレイヤーは、同時に 1 つのチケットだけ持てる（2 つ目は `409` `already_queued`）。チケットは、`meta.matchmaking.ticket_ttl_s` 秒で失効する。
+- **相手の選び方（レーティングの近さ・待ち時間など）は、サーバーが決める。** `meta.matchmaking` に、`ticket_ttl_s` と、対応する組（`pools`: `rule`・`clock_preset`）を公開する。
+- ゲストは、レート戦に入れない（`rated: false` のみ）。
 
 ---
 
@@ -455,6 +482,7 @@ data: {"v":1,"seq":31,"result":{"winner":"black","reason":"five"},"rating":{"bla
 | `game_over` | 409 | 終局済み |
 | `rate_limited` | 429 | 制限超過（`Retry-After`） |
 | `unsupported_rule` | 422 | このサーバーが対応しない規則 |
+| `already_queued` | 409 | すでにマッチングの待ち行列にいる |
 
 `detail` は人間向け。**アプリは `code` で判断し**、自分の言語で表示する。
 

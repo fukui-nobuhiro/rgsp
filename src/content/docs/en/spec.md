@@ -107,7 +107,7 @@ A server self-declares at `/.well-known/renju-game-server` on its own domain (JS
   "operator": { "name": "Example", "url": "https://example.com", "contact": "mailto:ops@example.com" },
   "api_base": "https://game.example.com/v1",
   "rules": ["renju.free", "renju.taraguchi10", "gomoku", "gomoku.swap2"],
-  "features": { "guest": true, "rated": true, "lobby": true, "spectate": true, "bots": true },
+  "features": { "guest": true, "rated": true, "lobby": true, "matchmaking": true, "spectate": true, "bots": true },
   "auth": {
     "authorization_endpoint": "https://game.example.com/oauth/authorize",
     "token_endpoint": "https://game.example.com/oauth/token",
@@ -127,6 +127,13 @@ A server self-declares at `/.well-known/renju-game-server` on its own domain (JS
     "description_url": "https://game.example.com/docs/rating"
   },
   "limits": { "max_concurrent_games_per_player": 3 },
+  "matchmaking": {
+    "ticket_ttl_s": 120,
+    "pools": [
+      { "rule": "renju.free", "clock_preset": "fischer-5m" },
+      { "rule": "renju.free", "clock_preset": "move-60s" }
+    ]
+  },
   "clocks": {
     "presets": [
       { "id": "fischer-5m", "name": "5 min + 3 s", "clock": { "initial_ms": 300000, "increment_ms": 3000 } },
@@ -253,11 +260,12 @@ The base URL is `api_base`. All bodies are JSON. See [openapi.yaml](/openapi.yam
 | `GET /games/{id}/stream` | Events (SSE; NDJSON optional, §6.4) | none if public | Play |
 | `GET /games/{id}/record?format=` | Export the record (§8) | none if public | Play |
 | `GET /games?status=live` | Live games to spectate (cursor paging) | none | Play (`spectate`) |
-| `POST /challenges` / `GET /challenges` / `POST /challenges/{id}/accept` | Seeks: create, list, accept | `lobby:write` | Lobby |
+| `POST /challenges` / `GET /challenges` / `POST /challenges/{id}/accept` | Lobby style: seeks — create, list, accept (§6.5) | `lobby:write` | Lobby (`features.lobby`) |
+| `POST /matchmaking` / `GET /matchmaking/{id}` / `DELETE /matchmaking/{id}` | Auto-matching: join the queue, status, cancel (§6.5) | `lobby:write` | Lobby (`features.matchmaking`) |
 | `GET /stream/events` | Events for me (challenge received, game started) | `game:read` | Lobby |
 | `GET /ratings?rule=&format=` | Server leaderboard | none | Lobby (optional) |
 
-**Conformance levels:** **Core** (`meta`, `rules/judge`, record retrieval) / **Play** (Core + games, SSE, spectating) / **Lobby** (Play + seeks, accepts, ratings).
+**Conformance levels:** **Core** (`meta`, `rules/judge`, record retrieval) / **Play** (Core + games, SSE, spectating) / **Lobby** (Play + at least one of lobby-style seeks or auto-matching; every advertised feature — `features.lobby`, `features.matchmaking` — must be implemented and pass the tests).
 
 ### 6.2 Rules judging `POST /rules/judge`
 
@@ -339,6 +347,25 @@ A server MAY also serve the same URL as NDJSON. **SSE is required; NDJSON is opt
 - A `game.state` line comes first, `seq` means the same, and gap handling is the same as SSE.
 - Resume with the `Last-Event-ID` header or a `since=<seq>` query (the last `seq` received).
 - Send a blank line as a heartbeat every 15–30 seconds (SHOULD). Receivers ignore blank lines.
+
+### 6.5 Finding a game (lobby style and auto-matching)
+
+**Both are optional.** A server advertises what it offers in `features.lobby` and `features.matchmaking` (either or both). Apps show screens that match the advertised features. Which style is preferred differs by country and community, so the spec provides both and each server decides.
+
+#### Lobby style (`features.lobby`)
+
+Create a seek with `POST /challenges`, browse with `GET /challenges`, and accept with `POST /challenges/{id}/accept`. A seek states the rule, the time setting and whether it is rated. When someone accepts, a game is created and the seeker receives `challenge.accepted` and `game.start`.
+
+#### Auto-matching (`features.matchmaking`)
+
+The player joins a queue and the server picks an opponent.
+
+- `POST /matchmaking`: send `{ "rule", "clock_preset", "rated" }`. **`clock_preset` is an `id` from `meta.clocks.presets`** (so that players with the same setting are paired; custom time settings are not allowed here). Returns `202` with `{ "ticket_id", "status": "queued", "expires_at" }`.
+- When an opponent is found, `/stream/events` delivers `game.start` (with `game_id`). `GET /matchmaking/{ticket_id}` also returns `status` (`queued`, `matched`, `cancelled`, `expired`) and the resulting `game_id`.
+- `DELETE /matchmaking/{ticket_id}` cancels the ticket.
+- A player may hold one ticket at a time (a second one gets `409` `already_queued`). A ticket expires after `meta.matchmaking.ticket_ttl_s` seconds.
+- **How opponents are chosen (rating proximity, waiting time, …) is up to the server.** `meta.matchmaking` publishes `ticket_ttl_s` and the supported pools (`pools`: `rule`, `clock_preset`).
+- Guests cannot join rated queues (`rated: false` only).
 
 ---
 
@@ -455,6 +482,7 @@ Errors use `application/problem+json` (RFC 9457).
 | `game_over` | 409 | Game already ended |
 | `rate_limited` | 429 | Limit exceeded (`Retry-After`) |
 | `unsupported_rule` | 422 | Rule not supported by this server |
+| `already_queued` | 409 | Already in the matchmaking queue |
 
 `detail` is for humans. **Apps decide by `code`** and display text in their own language.
 

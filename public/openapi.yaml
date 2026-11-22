@@ -297,6 +297,52 @@ paths:
         '404': { $ref: '#/components/responses/Problem' }
         '409': { $ref: '#/components/responses/Problem' }
 
+  /matchmaking:
+    post:
+      tags: [lobby]
+      summary: オートマッチの待ち行列に入る（features.matchmaking）
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rule, clock_preset]
+              properties:
+                rule: { $ref: '#/components/schemas/Rule' }
+                clock_preset: { type: string, description: meta.clocks.presets の id }
+                rated: { type: boolean, default: false }
+      responses:
+        '202':
+          description: チケット
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MatchTicket' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Problem' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /matchmaking/{ticketId}:
+    parameters:
+      - { name: ticketId, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [lobby]
+      summary: チケットの状態（成立したら game_id）
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MatchTicket' }
+        '404': { $ref: '#/components/responses/Problem' }
+    delete:
+      tags: [lobby]
+      summary: チケットを取り消す
+      responses:
+        '204': { description: 取り消した }
+        '404': { $ref: '#/components/responses/Problem' }
+
   /stream/events:
     get:
       tags: [lobby]
@@ -391,7 +437,7 @@ components:
           type: string
           description: |
             invalid_token / forbidden / not_found / not_your_turn / stale_move / illegal_move /
-            forbidden_point / invalid_action_for_phase / game_over / rate_limited / unsupported_rule / clock_not_allowed
+            forbidden_point / invalid_action_for_phase / game_over / rate_limited / unsupported_rule / clock_not_allowed / already_queued
         detail: { type: string }
 
     Rule:
@@ -674,6 +720,15 @@ components:
             white: { $ref: '#/components/schemas/RatingChange' }
         server_time: { type: string, format: date-time }
 
+    MatchTicket:
+      type: object
+      required: [ticket_id, status]
+      properties:
+        ticket_id: { type: string }
+        status: { type: string, enum: [queued, matched, cancelled, expired] }
+        expires_at: { type: string, format: date-time }
+        game_id: { type: string, description: status が matched のとき }
+
     RatingChange:
       type: object
       properties:
@@ -786,7 +841,8 @@ components:
           properties:
             guest: { type: boolean }
             rated: { type: boolean }
-            lobby: { type: boolean }
+            lobby: { type: boolean, description: ロビー式（募集・応募）を出すか }
+            matchmaking: { type: boolean, description: オートマッチ（待ち行列）を出すか }
             spectate: { type: boolean }
             bots: { type: boolean }
         auth:
@@ -820,6 +876,19 @@ components:
         limits:
           type: object
           additionalProperties: true
+        matchmaking:
+          type: object
+          description: features.matchmaking が真のとき。相手の選び方はサーバーが決める
+          properties:
+            ticket_ttl_s: { type: integer }
+            pools:
+              type: array
+              items:
+                type: object
+                required: [rule, clock_preset]
+                properties:
+                  rule: { $ref: '#/components/schemas/Rule' }
+                  clock_preset: { type: string, description: meta.clocks.presets の id }
         clocks:
           type: object
           description: このサーバーが出す時間設定。アプリはプリセットを選択肢として見せる

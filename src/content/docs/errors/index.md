@@ -19,3 +19,4 @@ description: RGSP 公開用 API 仕様書 v0.1（ドラフト）
 | [`rate_limited`](./rate-limited/) | 429 | 制限超過（`Retry-After`） |
 | [`unsupported_rule`](./unsupported-rule/) | 422 | このサーバーが対応しない規則 |
 | [`clock_not_allowed`](./clock-not-allowed/) | 422 | このサーバーが受け付けない時間設定 |
+| [`already_queued`](./already-queued/) | 409 | すでにマッチングの待ち行列にいる |
