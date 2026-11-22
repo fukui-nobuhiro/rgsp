@@ -115,7 +115,17 @@ curl https://game.example.com/v1/games/g_01JABCDEF/record?format=json
     "personal_token_url": "https://game.example.com/settings/tokens",
     "scopes": ["game:read", "game:play", "lobby:write", "rating:read"]
   },
-  "rating": { "algorithm": "glicko2", "initial": 1500, "scope": "server" },
+  "rating": {
+    "algorithm": "glicko2",
+    "scope": "server",
+    "initial": 1500,
+    "uses_rd": true,
+    "axes": [
+      { "id": "renju.free:realtime", "rule": "renju.free", "format": "realtime" },
+      { "id": "gomoku:realtime", "rule": "gomoku", "format": "realtime" }
+    ],
+    "description_url": "https://game.example.com/docs/rating"
+  },
   "limits": { "max_concurrent_games_per_player": 3 },
   "clocks": {
     "presets": [
@@ -408,8 +418,15 @@ data: {"v":1,"seq":31,"result":{"winner":"black","reason":"five"},"rating":{"bla
 
 
 - **レーティングはサーバーごとの値**で、他のサーバーとは比較できない。アプリは、サーバー名とともに表示する（MUST）。
-- 方式は `meta.rating` で自己申告する。**推奨は Glicko-2**（初期 1500・RD 350・τ 0.5）。別の方式を使ってもよいが、`algorithm` に名前を出す。
-- 軸は、規則×形式（リアルタイム・通信）を基本にする。`GET /players/{id}` が、軸ごとの `rating`・`rd`・`games_played`・`provisional` を返す。
+- **方式は、サーバーが自由に決めてよい**（Glicko-2・Elo・段級位など）。仕様は方式を決めず、**値の返し方だけ**を決める。方式は `meta.rating` で公開する。
+  - `algorithm`: 方式の名前（自由。例: `glicko2`・`elo`・`dan-kyu`）。
+  - `initial`: 初期値（任意）。`uses_rd`: `rd` を返すか。
+  - `axes`: 軸の一覧（`id`・`rule`・`format`）。**軸の切り方も、サーバーが決める**（規則ごと・形式ごと・全体で 1 つ、など）。
+  - `description_url`: 方式の説明のページ（任意。SHOULD）。
+- **`rating` は数値（整数）で返す**（MUST）。アプリは、数値で並べ替え・比較できる。**値が大きいほど強い**とする。
+- 次は任意: `rd`（`uses_rd` が真のとき）・`provisional`（暫定か）・`games_played`・**`label`**（段級位など、人が読む表示名。例: `"3段"`）。**アプリは、`label` があれば、それを表示する**（SHOULD）。なければ数値を表示する。
+- 軸ごとに値を持つ。`GET /players/{id}` が、軸ごとに `axis`・`rating`・（任意で）`rd`・`games_played`・`provisional`・`label` を返す。`game.end` のレート変動は、`before`・`after`（数値）と、任意の `before_label`・`after_label` で返す。
+- **レーティングなしのサーバー**は、`features.rated` を偽にする。このとき、レーティングの項目は返さなくてよい。
 - 同じサーバーなら、別のアプリのユーザーどうしも、そのサーバーのレーティングでマッチする。
 - カジュアル（`rated: false`）はレートを動かさない。
 

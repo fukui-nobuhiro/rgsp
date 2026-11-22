@@ -454,14 +454,19 @@ components:
 
     Rating:
       type: object
-      required: [rating, rd, games_played, provisional]
+      description: |
+        軸ごとのレーティング。方式はサーバーが自由に決める（`meta.rating`）。
+        `rating` は数値（値が大きいほど強い）。`label` があれば、アプリはそれを表示する。
+      required: [rating]
       properties:
+        axis: { type: string, description: meta.rating.axes の id }
         rule: { $ref: '#/components/schemas/Rule' }
         format: { type: string, enum: [realtime, correspondence] }
-        rating: { type: integer }
-        rd: { type: integer }
+        rating: { type: integer, description: 数値。値が大きいほど強い }
+        rd: { type: integer, description: meta.rating.uses_rd が真のとき }
         games_played: { type: integer }
         provisional: { type: boolean }
+        label: { type: string, description: 段級位などの表示名（例「3段」） }
 
     PlayerRef:
       type: object
@@ -674,6 +679,8 @@ components:
       properties:
         before: { type: integer }
         after: { type: integer }
+        before_label: { type: string }
+        after_label: { type: string }
 
     Record:
       type: object
@@ -794,10 +801,22 @@ components:
               items: { type: string }
         rating:
           type: object
+          description: レーティングの方式はサーバーが自由に決める。値の返し方だけを仕様で決める
           properties:
-            algorithm: { type: string, examples: [glicko2] }
+            algorithm: { type: string, description: 方式の名前（自由）, examples: [glicko2, elo, dan-kyu] }
             initial: { type: integer }
             scope: { type: string, const: server }
+            uses_rd: { type: boolean }
+            axes:
+              type: array
+              items:
+                type: object
+                required: [id]
+                properties:
+                  id: { type: string }
+                  rule: { $ref: '#/components/schemas/Rule' }
+                  format: { type: string, enum: [realtime, correspondence] }
+            description_url: { type: string, format: uri }
         limits:
           type: object
           additionalProperties: true

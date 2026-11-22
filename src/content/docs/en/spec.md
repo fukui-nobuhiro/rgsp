@@ -115,7 +115,17 @@ A server self-declares at `/.well-known/renju-game-server` on its own domain (JS
     "personal_token_url": "https://game.example.com/settings/tokens",
     "scopes": ["game:read", "game:play", "lobby:write", "rating:read"]
   },
-  "rating": { "algorithm": "glicko2", "initial": 1500, "scope": "server" },
+  "rating": {
+    "algorithm": "glicko2",
+    "scope": "server",
+    "initial": 1500,
+    "uses_rd": true,
+    "axes": [
+      { "id": "renju.free:realtime", "rule": "renju.free", "format": "realtime" },
+      { "id": "gomoku:realtime", "rule": "gomoku", "format": "realtime" }
+    ],
+    "description_url": "https://game.example.com/docs/rating"
+  },
   "limits": { "max_concurrent_games_per_player": 3 },
   "clocks": {
     "presets": [
@@ -408,8 +418,15 @@ The server judges the opponent's `presence` from the SSE connection and the time
 
 
 - **A rating is a per-server value** and is not comparable across servers. Apps MUST display it together with the server name.
-- The method is self-declared in `meta.rating`. **Glicko-2 is recommended** (initial 1500, RD 350, τ 0.5). Other methods are allowed but must name themselves in `algorithm`.
-- Rating axes are basically rule × format (real-time / correspondence). `GET /players/{id}` returns `rating`, `rd`, `games_played` and `provisional` per axis.
+- **The method is up to each server** (Glicko-2, Elo, dan/kyu ranks, …). The spec does not fix a method; it fixes **only how values are returned**. The method is published in `meta.rating`.
+  - `algorithm`: the method's name (free-form, e.g. `glicko2`, `elo`, `dan-kyu`).
+  - `initial`: the starting value (optional). `uses_rd`: whether `rd` is returned.
+  - `axes`: the list of axes (`id`, `rule`, `format`). **How axes are cut is also the server's choice** (per rule, per format, a single one, …).
+  - `description_url`: a page explaining the method (optional, SHOULD).
+- **`rating` is returned as a number (integer)** (MUST), so apps can sort and compare by it. **A larger value means stronger.**
+- Optional: `rd` (when `uses_rd` is true), `provisional`, `games_played`, and **`label`**, a human-readable name such as a dan/kyu rank (e.g. `"3-dan"`). **Apps SHOULD show `label` when present**, and the number otherwise.
+- Values are per axis. `GET /players/{id}` returns `axis`, `rating` and, optionally, `rd`, `games_played`, `provisional` and `label` per axis. The rating change in `game.end` carries `before` and `after` (numbers) plus optional `before_label` and `after_label`.
+- A server without ratings sets `features.rated` to false and need not return rating fields.
 - On the same server, users of different apps are matched using that server's ratings.
 - Casual games (`rated: false`) do not change ratings.
 
